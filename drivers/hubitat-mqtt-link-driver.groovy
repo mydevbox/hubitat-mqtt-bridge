@@ -236,13 +236,14 @@ def parse(String event) {
 }
 
 def mqttClientStatus(status) {
-    if (status.startsWith("Error")) 
+    if (status.startsWith("Status: Connection succeeded")) 
+        connected()
+    else if (status.startsWith("Error: Connection lost: Connection lost"))
+        disconnected()
+    else if (status.startsWith("Error")) 
         error("[mqttClientStatus] ${status}")
     else
-        debug("[mqttClientStatus] ${status}")
-    
-    if (status.startsWith("Status: Connection succeeded")) connected()
-    if (status.startsWith("Error: Connection lost: Connection lost")) disconnected()
+        info("[mqttClientStatus] ${status}")
 }
 
 def publishMqtt(topic, payload, qos = 0, retained = false) {
@@ -265,12 +266,21 @@ def connected() {
     debug("[connected] Connected to broker")
     sendEvent (name: "connectionState", value: "connected")
     announceLwtStatus("online")
+    
+    state?.reconnectDelay = 1
+    state?.connectionActive = true
 }
 
 def disconnected() {
     debug("[disconnected] Disconnected from broker")
     sendEvent (name: "connectionState", value: "disconnected")
-    announceLwtStatus("offline")
+    
+    // first delay is 2 seconds, doubles every time
+    state.reconnectDelay = (state.reconnectDelay ?: 1) * 2
+    // don't def the delay get too crazy, max it out at 10 minutes
+    if(state.reconnectDelay > 600) state.reconnectDelay = 600
+    state?.connectionActive = false
+    runIn(state?.reconnectDelay, initialize)
 }
 
 def announceLwtStatus(String status) {
