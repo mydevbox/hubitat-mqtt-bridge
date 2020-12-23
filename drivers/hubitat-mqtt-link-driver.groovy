@@ -136,19 +136,11 @@ def publish(topic, payload) {
 }
 
 def subscribe(topic) {
-    if (notMqttConnected()) {
-        connect()
-    }
-
     debug("[subscribe] full topic: ${getTopicPrefix()}${topic}")
     interfaces.mqtt.subscribe("${getTopicPrefix()}${topic}")
 }
 
 def unsubscribe(topic) {
-    if (notMqttConnected()) {
-        connect()
-    }
-
     debug("[unsubscribe] full topic: ${getTopicPrefix()}${topic}")
     interfaces.mqtt.unsubscribe("${getTopicPrefix()}${topic}")
 }
@@ -244,20 +236,16 @@ def parse(String event) {
 }
 
 def mqttClientStatus(status) {
-    if (status.startsWith("status: Error")) {
-        error("${status}")
-        if (notMqttConnected()) disconnected()
-    } else {
-        debug("[mqttClientStatus] status: ${status}")
-        if (mqttConnected()) connected()
-    }   
+    if (status.startsWith("Error")) 
+        error("[mqttClientStatus] ${status}")
+    else
+        debug("[mqttClientStatus] ${status}")
+    
+    if (status.startsWith("Status: Connection succeeded")) connected()
+    if (status.startsWith("Error: Connection lost: Connection lost")) disconnected()
 }
 
 def publishMqtt(topic, payload, qos = 0, retained = false) {
-    if (notMqttConnected()) {
-        initialize()
-    }
-    
     def pubTopic = "${getTopicPrefix()}${topic}"
 
     try {
@@ -274,13 +262,13 @@ def publishMqtt(topic, payload, qos = 0, retained = false) {
 // ========================================================
 
 def connected() {
-    info("[connected] Connected to broker")
+    debug("[connected] Connected to broker")
     sendEvent (name: "connectionState", value: "connected")
     announceLwtStatus("online")
 }
 
 def disconnected() {
-    info("[disconnected] Disconnected from broker")
+    debug("[disconnected] Disconnected from broker")
     sendEvent (name: "connectionState", value: "disconnected")
     announceLwtStatus("offline")
 }
