@@ -148,14 +148,13 @@ def unsubscribe(topic) {
     if (notMqttConnected()) {
         connect()
     }
-    
+
     debug("[unsubscribe] full topic: ${getTopicPrefix()}${topic}")
     interfaces.mqtt.unsubscribe("${getTopicPrefix()}${topic}")
 }
 
 def connect() {
     initialize()
-    connected()
 }
 
 def disconnect() {
@@ -164,7 +163,6 @@ def disconnect() {
         disconnected()
     } catch(e) {
         warn("Disconnection from broker failed", ${e.message})
-        if (interfaces.mqtt.isConnected()) connected()
     }
 }
 
@@ -211,10 +209,6 @@ def deviceSubscribe(message) {
 
 def sendDeviceEvent(message) {
     topic = "${message.normalizedId}/"
-
-    if (mqttConnected) {
-        connected()
-    }
     
     // Send command value only
     publishMqtt("${topic}${message.name}", message.value)
@@ -250,7 +244,13 @@ def parse(String event) {
 }
 
 def mqttClientStatus(status) {
-    debug("[mqttClientStatus] status: ${status}")
+    if (status.startsWith("status: Error")) {
+        error("${status}")
+        if (notMqttConnected()) disconnected()
+    } else {
+        debug("[mqttClientStatus] status: ${status}")
+        if (mqttConnected()) connected()
+    }   
 }
 
 def publishMqtt(topic, payload, qos = 0, retained = false) {
