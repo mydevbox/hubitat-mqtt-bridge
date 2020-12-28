@@ -46,6 +46,7 @@ metadata {
         	iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Connections/Cat-Connections@3x.png"
         ) {
 		capability "Notification"
+        attribute "status", ""
 
 		preferences {
 			input(
@@ -238,7 +239,7 @@ def parse(String event) {
 def mqttClientStatus(status) {
     if (status.startsWith("Status: Connection succeeded")) 
         connected()
-    else if (status.startsWith("Error: Connection lost: Connection lost"))
+    else if (status.startsWith("Error: Connection lost"))
         disconnected()
     else if (status.startsWith("Error")) 
         error("[mqttClientStatus] ${status}")
@@ -264,7 +265,7 @@ def publishMqtt(topic, payload, qos = 0, retained = false) {
 
 def connected() {
     debug("[connected] Connected to broker")
-    sendEvent (name: "connectionState", value: "connected")
+    sendEvent (name: "status", value: "connected")
     announceLwtStatus("online")
     
     state?.reconnectDelay = 1
@@ -273,7 +274,7 @@ def connected() {
 
 def disconnected() {
     debug("[disconnected] Disconnected from broker")
-    sendEvent (name: "connectionState", value: "disconnected")
+    sendEvent (name: "status", value: "disconnected")
     
     // first delay is 2 seconds, doubles every time
     state.reconnectDelay = (state.reconnectDelay ?: 1) * 2
