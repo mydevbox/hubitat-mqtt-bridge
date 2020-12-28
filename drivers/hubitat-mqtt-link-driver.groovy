@@ -125,6 +125,7 @@ void initialize() {
         
     } catch(Exception e) {
         error("[initialize] ${e}")
+        disconnected()
     }
 }
 
@@ -147,13 +148,18 @@ def unsubscribe(topic) {
 }
 
 def connect() {
+    
+    state?.reconnect = true
+    
     initialize()
 }
 
 def disconnect() {
+
+    state?.reconnect = false
+    
     try {
         interfaces.mqtt.disconnect()
-        disconnected()
     } catch(e) {
         warn("Disconnection from broker failed", ${e.message})
     }
@@ -275,13 +281,14 @@ def connected() {
 def disconnected() {
     debug("[disconnected] Disconnected from broker")
     sendEvent (name: "status", value: "disconnected")
-    
-    // first delay is 2 seconds, doubles every time
-    state.reconnectDelay = (state.reconnectDelay ?: 1) * 2
-    // don't def the delay get too crazy, max it out at 10 minutes
-    if(state.reconnectDelay > 600) state.reconnectDelay = 600
-    state?.connectionActive = false
-    runIn(state?.reconnectDelay, initialize)
+    if (state?.reconnect) {
+        // first delay is 2 seconds, doubles every time
+        state.reconnectDelay = (state.reconnectDelay ?: 1) * 2
+        // don't def the delay get too crazy, max it out at 10 minutes
+        if(state.reconnectDelay > 600) state.reconnectDelay = 600
+        state?.connectionActive = false
+        runIn(state?.reconnectDelay, initialize)
+    }
 }
 
 def announceLwtStatus(String status) {
