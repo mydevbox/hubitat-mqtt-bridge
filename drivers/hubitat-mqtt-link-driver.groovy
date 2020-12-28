@@ -30,7 +30,7 @@
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
-public static String version() { return "v1.0.0" }
+public static String version() { return "v1.0.1" }
 public static String rootTopic() { return "hubitat" }
 
 //hubitat / {hub-name} / { device-name } / { device-capability } / STATE
@@ -46,6 +46,7 @@ metadata {
         	iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Connections/Cat-Connections@3x.png"
         ) {
 		capability "Notification"
+        attribute "status", ""
 
 		preferences {
 			input(
@@ -124,6 +125,7 @@ void initialize() {
         
     } catch(Exception e) {
         error("[initialize] ${e}")
+        disconnected()
     }
 }
 
@@ -136,35 +138,31 @@ def publish(topic, payload) {
 }
 
 def subscribe(topic) {
-    if (notMqttConnected()) {
-        connect()
-    }
-
     debug("[subscribe] full topic: ${getTopicPrefix()}${topic}")
     interfaces.mqtt.subscribe("${getTopicPrefix()}${topic}")
 }
 
 def unsubscribe(topic) {
-    if (notMqttConnected()) {
-        connect()
-    }
-    
     debug("[unsubscribe] full topic: ${getTopicPrefix()}${topic}")
     interfaces.mqtt.unsubscribe("${getTopicPrefix()}${topic}")
 }
 
 def connect() {
+    
+    state?.reconnect = true
+    
     initialize()
-    connected()
 }
 
 def disconnect() {
+
+    state?.reconnect = false
+    
     try {
         interfaces.mqtt.disconnect()
         disconnected()
     } catch(e) {
         warn("Disconnection from broker failed", ${e.message})
-        if (interfaces.mqtt.isConnected()) connected()
     }
 }
 
@@ -211,10 +209,6 @@ def deviceSubscribe(message) {
 
 def sendDeviceEvent(message) {
     topic = "${message.normalizedId}/"
-
-    if (mqttConnected) {
-        connected()
-    }
     
     // Send command value only
     publishMqtt("${topic}${message.name}", message.value)
@@ -250,14 +244,17 @@ def parse(String event) {
 }
 
 def mqttClientStatus(status) {
-    debug("[mqttClientStatus] status: ${status}")
+    if (status.startsWith("Status: Connection succeeded")) 
+        connected()
+    else if (status.startsWith("Error: Connection lost"))
+        disconnected()
+    else if (status.startsWith("Error")) 
+        error("[mqttClientStatus] ${status}")
+    else
+        info("[mqttClientStatus] ${status}")
 }
 
 def publishMqtt(topic, payload, qos = 0, retained = false) {
-    if (notMqttConnected()) {
-        initialize()
-    }
-    
     def pubTopic = "${getTopicPrefix()}${topic}"
 
     try {
@@ -274,15 +271,22 @@ def publishMqtt(topic, payload, qos = 0, retained = false) {
 // ========================================================
 
 def connected() {
-    info("[connected] Connected to broker")
-    sendEvent (name: "connectionState", value: "connected")
+    state?.reconnectDelay = 1
+    debug("[connected] Connected to broker")
+    sendEvent (name: "status", value: "connected")
     announceLwtStatus("online")
 }
 
 def disconnected() {
-    info("[disconnected] Disconnected from broker")
-    sendEvent (name: "connectionState", value: "disconnected")
-    announceLwtStatus("offline")
+    debug("[disconnected] Disconnected from broker")
+    sendEvent (name: "status", value: "disconnected")
+    if (state?.reconnect) {
+        // first delay is 2 seconds, doubles every time
+        state.reconnectDelay = (state.reconnectDelay ?: 1) * 2
+        // don't def the delay get too crazy, max it out at 10 minutes
+        if(state.reconnectDelay > 600) state.reconnectDelay = 600
+        runIn(state?.reconnectDelay, initialize)
+    }
 }
 
 def announceLwtStatus(String status) {
