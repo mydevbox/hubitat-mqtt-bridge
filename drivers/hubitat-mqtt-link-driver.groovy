@@ -30,7 +30,7 @@
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
-public static String version() { return "v1.0.0" }
+public static String version() { return "v1.0.1" }
 public static String rootTopic() { return "hubitat" }
 
 //hubitat / {hub-name} / { device-name } / { device-capability } / STATE
@@ -160,6 +160,7 @@ def disconnect() {
     
     try {
         interfaces.mqtt.disconnect()
+        disconnected()
     } catch(e) {
         warn("Disconnection from broker failed", ${e.message})
     }
@@ -270,12 +271,10 @@ def publishMqtt(topic, payload, qos = 0, retained = false) {
 // ========================================================
 
 def connected() {
+    state?.reconnectDelay = 1
     debug("[connected] Connected to broker")
     sendEvent (name: "status", value: "connected")
     announceLwtStatus("online")
-    
-    state?.reconnectDelay = 1
-    state?.connectionActive = true
 }
 
 def disconnected() {
@@ -286,7 +285,6 @@ def disconnected() {
         state.reconnectDelay = (state.reconnectDelay ?: 1) * 2
         // don't def the delay get too crazy, max it out at 10 minutes
         if(state.reconnectDelay > 600) state.reconnectDelay = 600
-        state?.connectionActive = false
         runIn(state?.reconnectDelay, initialize)
     }
 }
