@@ -709,7 +709,7 @@ preferences {
 		name: "Switch Level",
 		capability: "capability.switchLevel",
 		attributes: [
-			"level"
+			"switchLevel"
 		],
 		action: "actionSwitchLevel"
 	],
